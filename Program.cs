@@ -75,7 +75,8 @@ builder.Services.AddCors(options =>
             "http://localhost:3000",  // Create React App
             "https://localhost:3000", // Create React App con HTTPS
             "http://127.0.0.1:5173",  // Vite alternativo
-            "http://127.0.0.1:3000"   // CRA alternativo
+            "http://127.0.0.1:3000",   // CRA alternativo
+            "https://ecommerce-react-tailwindcss.vercel.app"
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
