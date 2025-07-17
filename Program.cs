@@ -5,7 +5,6 @@ using EcommerceAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-
 using System.IdentityModel.Tokens.Jwt;
 using System.Text;
 
@@ -65,6 +64,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// CORS actualizado para permitir frontend local
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
@@ -73,7 +73,9 @@ builder.Services.AddCors(options =>
             "http://localhost:5173",  // Vite dev server
             "https://localhost:5173", // Vite con HTTPS
             "http://localhost:3000",  // Create React App
-            "https://localhost:3000"  // Create React App con HTTPS
+            "https://localhost:3000", // Create React App con HTTPS
+            "http://127.0.0.1:5173",  // Vite alternativo
+            "http://127.0.0.1:3000"   // CRA alternativo
         )
         .AllowAnyHeader()
         .AllowAnyMethod()
@@ -93,14 +95,17 @@ builder.Services.AddScoped<IOrderService, OrderService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Swagger habilitado SIEMPRE (para testing en producción)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ecommerce API V1");
+    c.RoutePrefix = "swagger"; // Accesible en /swagger
+});
+
+// Solo en development
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI(c =>
-    {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Ecommerce API V1");
-    });
     app.UseDeveloperExceptionPage();
 }
 
