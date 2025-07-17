@@ -9,11 +9,20 @@ namespace EcommerceAPI.Controllers
     [Route("api/[controller]")]
     public class CheckoutController : ControllerBase
     {
+        private readonly ILogger<CheckoutController> _logger;
+
+        public CheckoutController(ILogger<CheckoutController> logger)
+        {
+            Console.WriteLine("🔍 CheckoutController constructor with ILogger");
+            _logger = logger;
+            Console.WriteLine("🔍 ILogger injected successfully");
+        }
+
         [HttpPost]
         public IActionResult CreateCheckout([FromBody] CreateOrderDto createOrderDto)
         {
-            Console.WriteLine("🔍 Basic CheckoutController reached");
-            return Ok(new { message = "CheckoutController reached", data = createOrderDto });
+            Console.WriteLine("🔍 CheckoutController with ILogger reached");
+            return Ok(new { message = "CheckoutController with ILogger works", data = createOrderDto });
         }
     }
     //[ApiController]
