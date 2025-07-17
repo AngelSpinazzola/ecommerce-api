@@ -22,13 +22,23 @@ namespace EcommerceAPI.Controllers
         [HttpPost]
         public async Task<IActionResult> CreateCheckout([FromBody] CreateOrderDto createOrderDto)
         {
+            Console.WriteLine("🔍 CheckoutController.CreateCheckout started");
+            Console.WriteLine($"🔍 Received JSON: {System.Text.Json.JsonSerializer.Serialize(createOrderDto)}");
+
             try
             {
+                Console.WriteLine("🔍 Validating ModelState");
                 if (!ModelState.IsValid)
                 {
+                    Console.WriteLine("🔍 ModelState is INVALID");
+                    foreach (var error in ModelState)
+                    {
+                        Console.WriteLine($"🔍 ModelState Error - {error.Key}: {string.Join(", ", error.Value.Errors.Select(e => e.ErrorMessage))}");
+                    }
                     return BadRequest(ModelState);
                 }
 
+                Console.WriteLine("🔍 ModelState is valid, getting UserId");
                 // Obtener UserId si el usuario está autenticado
                 int? userId = null;
                 if (User.Identity?.IsAuthenticated == true)
@@ -39,20 +49,25 @@ namespace EcommerceAPI.Controllers
                         userId = parsedUserId;
                     }
                 }
+                Console.WriteLine($"🔍 UserId: {userId}");
 
+                Console.WriteLine("🔍 Calling CheckoutService.CreateCheckoutAsync");
                 var checkout = await _checkoutService.CreateCheckoutAsync(createOrderDto, userId);
 
+                Console.WriteLine($"🔍 Checkout completed successfully. OrderId: {checkout.OrderId}");
                 _logger.LogInformation("Checkout created successfully for order: {OrderId}", checkout.OrderId);
-
                 return Ok(checkout);
             }
             catch (ArgumentException ex)
             {
+                Console.WriteLine($"🔍 ArgumentException: {ex.Message}");
                 _logger.LogWarning("Checkout validation error: {Message}", ex.Message);
                 return BadRequest(new { message = ex.Message });
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"🔍 Exception: {ex.Message}");
+                Console.WriteLine($"🔍 StackTrace: {ex.StackTrace}");
                 _logger.LogError(ex, "Error creating checkout");
                 return StatusCode(500, new { message = "Error interno del servidor", error = ex.Message });
             }
