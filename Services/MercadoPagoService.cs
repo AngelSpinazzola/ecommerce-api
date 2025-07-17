@@ -23,8 +23,8 @@ namespace EcommerceAPI.Services
             Console.WriteLine($"🔍 AccessToken length: {accessToken?.Length ?? 0}");
             Console.WriteLine($"🔍 AccessToken starts with TEST: {accessToken?.StartsWith("TEST") ?? false}");
 
-            _accessToken = configuration["MercadoPago:AccessToken"] ?? throw new ArgumentException("MercadoPago AccessToken is required");
-            _webhookSecret = configuration["MercadoPago:WebhookSecret"] ?? string.Empty;
+            _accessToken = configuration["MercadoPago__AccessToken"] ?? throw new ArgumentException("MercadoPago AccessToken is required");
+            _webhookSecret = configuration["MercadoPago__WebhookSecret"] ?? string.Empty;
 
             // Configurar HttpClient
             _httpClient.BaseAddress = new Uri(BaseUrl);
