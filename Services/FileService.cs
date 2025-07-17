@@ -3,36 +3,34 @@ using CloudinaryDotNet.Actions;
 
 namespace EcommerceAPI.Services
 {
-    public interface IFileService
-    {
-        Task<string> SaveImageAsync(IFormFile imageFile, string folder = "products");
-        Task<bool> DeleteImageAsync(string imagePath);
-        bool IsValidImageFile(IFormFile file);
-        Task<List<string>> SaveMultipleImagesAsync(IFormFile[] imageFiles, string folder = "products");
-    }
-
     public class FileService : IFileService
     {
         private readonly Cloudinary _cloudinary;
         private readonly ILogger<FileService> _logger;
         private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
-        private const long MaxFileSize = 10 * 1024 * 1024; // 10MB (límite de Cloudinary free)
+        private const long MaxFileSize = 10 * 1024 * 1024;
 
         public FileService(IConfiguration configuration, ILogger<FileService> logger)
         {
             _logger = logger;
 
-            var account = new Account(
-                configuration["Cloudinary:CloudName"],
-                configuration["Cloudinary:ApiKey"],
-                configuration["Cloudinary:ApiSecret"]
-            );
+            var cloudName = configuration["Cloudinary:CloudName"];
+            var apiKey = configuration["Cloudinary:ApiKey"];
+            var apiSecret = configuration["Cloudinary:ApiSecret"];
 
+            Console.WriteLine("🔍 NEW FileService with Cloudinary initialized!");
+            Console.WriteLine($"🔍 CloudName: {cloudName}");
+            Console.WriteLine($"🔍 ApiKey: {apiKey}");
+            Console.WriteLine($"🔍 HasApiSecret: {!string.IsNullOrEmpty(apiSecret)}");
+
+            var account = new Account(cloudName, apiKey, apiSecret);
             _cloudinary = new Cloudinary(account);
         }
 
         public async Task<string> SaveImageAsync(IFormFile imageFile, string folder = "products")
         {
+            Console.WriteLine($"🔍 SaveImageAsync called with: {imageFile.FileName}");
+
             try
             {
                 if (!IsValidImageFile(imageFile))
@@ -79,9 +77,8 @@ namespace EcommerceAPI.Services
                 if (string.IsNullOrEmpty(imagePath))
                     return false;
 
-                // Solo procesar URLs de Cloudinary
                 if (!imagePath.Contains("cloudinary.com"))
-                    return true; // No es de Cloudinary, no hacer nada
+                    return true; 
 
                 var publicId = ExtractPublicIdFromUrl(imagePath);
                 if (string.IsNullOrEmpty(publicId))
@@ -112,7 +109,6 @@ namespace EcommerceAPI.Services
             if (!_allowedExtensions.Contains(extension))
                 return false;
 
-            // Validar MIME type
             var allowedMimeTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp" };
             return allowedMimeTypes.Contains(file.ContentType.ToLower());
         }
@@ -131,7 +127,6 @@ namespace EcommerceAPI.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, $"Error al subir archivo: {file.FileName}");
-                    // Continúa con los otros archivos
                 }
             }
 
@@ -142,20 +137,15 @@ namespace EcommerceAPI.Services
         {
             try
             {
-                // URL típica de Cloudinary: 
-                // https://res.cloudinary.com/cloudname/image/upload/v1234567890/folder/filename.jpg
                 var uri = new Uri(imageUrl);
                 var pathParts = uri.AbsolutePath.Split('/');
 
-                // Buscar la parte después de /upload/
                 var uploadIndex = Array.IndexOf(pathParts, "upload");
                 if (uploadIndex >= 0 && uploadIndex + 2 < pathParts.Length)
                 {
-                    // Saltar /upload/ y versión (v1234567890)
                     var publicIdParts = pathParts.Skip(uploadIndex + 2).ToArray();
                     var publicId = string.Join("/", publicIdParts);
 
-                    // Remover extensión
                     var lastDotIndex = publicId.LastIndexOf('.');
                     if (lastDotIndex > 0)
                         publicId = publicId.Substring(0, lastDotIndex);
