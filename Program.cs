@@ -90,9 +90,10 @@ builder.Services.AddScoped<IProductRepository, ProductRepository>();
 builder.Services.AddScoped<IProductImageRepository, ProductImageRepository>();
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<IProductImageService, ProductImageService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
-builder.Services.AddScoped<IFileService, FileService>();
+builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 
 var app = builder.Build();
 

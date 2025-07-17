@@ -1,0 +1,116 @@
+﻿using EcommerceAPI.DTOs.MercadoPago;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace EcommerceAPI.Services
+{
+    public class MercadoPagoService : IMercadoPagoService
+    {
+        private readonly HttpClient _httpClient;
+        private readonly ILogger<MercadoPagoService> _logger;
+        private readonly string _accessToken;
+        private readonly string _webhookSecret;
+        private const string BaseUrl = "https://api.mercadopago.com";
+
+        public MercadoPagoService(HttpClient httpClient, IConfiguration configuration, ILogger<MercadoPagoService> logger)
+        {
+            _httpClient = httpClient;
+            _logger = logger;
+            _accessToken = configuration["MercadoPago:AccessToken"] ?? throw new ArgumentException("MercadoPago AccessToken is required");
+            _webhookSecret = configuration["MercadoPago:WebhookSecret"] ?? string.Empty;
+
+            // Configurar HttpClient
+            _httpClient.BaseAddress = new Uri(BaseUrl);
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_accessToken}");
+            _httpClient.DefaultRequestHeaders.Add("X-Idempotency-Key", Guid.NewGuid().ToString());
+        }
+
+        public async Task<CreatePreferenceResponseDto> CreatePreferenceAsync(CreatePreferenceDto preferenceDto)
+        {
+            try
+            {
+                var jsonContent = JsonSerializer.Serialize(preferenceDto, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                });
+
+                var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+
+                _logger.LogInformation("Creating MercadoPago preference: {Content}", jsonContent);
+
+                var response = await _httpClient.PostAsync("/checkout/preferences", content);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("MercadoPago API error: {StatusCode} - {Content}", response.StatusCode, responseContent);
+                    throw new Exception($"Error creating preference: {response.StatusCode}");
+                }
+
+                var preference = JsonSerializer.Deserialize<CreatePreferenceResponseDto>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                _logger.LogInformation("MercadoPago preference created successfully: {PreferenceId}", preference?.Id);
+
+                return preference ?? throw new Exception("Invalid response from MercadoPago");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating MercadoPago preference");
+                throw;
+            }
+        }
+
+        public async Task<PaymentInfoDto> GetPaymentInfoAsync(string paymentId)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"/v1/payments/{paymentId}");
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Error getting payment info: {StatusCode} - {Content}", response.StatusCode, responseContent);
+                    throw new Exception($"Error getting payment info: {response.StatusCode}");
+                }
+
+                var payment = JsonSerializer.Deserialize<PaymentInfoDto>(responseContent, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+                });
+
+                return payment ?? throw new Exception("Invalid payment response");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error getting payment info for ID: {PaymentId}", paymentId);
+                throw;
+            }
+        }
+
+        public async Task<bool> ValidateWebhookSignature(string xSignature, string xRequestId, string dataId)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_webhookSecret))
+                {
+                    _logger.LogWarning("Webhook secret not configured, skipping signature validation");
+                    return true; // En desarrollo, permitir sin validación
+                }
+
+                // Implementar validación de firma de webhook según documentación de MercadoPago
+                // Por ahora, devolver true para desarrollo
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error validating webhook signature");
+                return false;
+            }
+        }
+    }
+}
