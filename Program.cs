@@ -94,6 +94,8 @@ builder.Services.AddScoped<IFileService, FileService>();
 builder.Services.AddScoped<IProductImageService, ProductImageService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+builder.Services.AddScoped<ICheckoutService, CheckoutService>();
+builder.Services.AddHttpClient<IMercadoPagoService, MercadoPagoService>();
 
 var app = builder.Build();
 
