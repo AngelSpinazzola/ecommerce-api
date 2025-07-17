@@ -15,22 +15,39 @@ namespace EcommerceAPI.Services
 
         public MercadoPagoService(HttpClient httpClient, IConfiguration configuration, ILogger<MercadoPagoService> logger)
         {
+            Console.WriteLine("🔍 MercadoPagoService constructor started");
+
             _httpClient = httpClient;
             _logger = logger;
 
-            var accessToken = configuration["MercadoPago:AccessToken"];
-            Console.WriteLine($"🔍 AccessToken found: {!string.IsNullOrEmpty(accessToken)}");
-            Console.WriteLine($"🔍 AccessToken length: {accessToken?.Length ?? 0}");
-            Console.WriteLine($"🔍 AccessToken starts with TEST: {accessToken?.StartsWith("TEST") ?? false}");
+            // Test TODAS las formas posibles
+            Console.WriteLine("🔍 Testing all configuration formats:");
+            Console.WriteLine($"🔍 MercadoPago:AccessToken = '{configuration["MercadoPago:AccessToken"]}'");
+            Console.WriteLine($"🔍 MercadoPago__AccessToken = '{configuration["MercadoPago__AccessToken"]}'");
+            Console.WriteLine($"🔍 MERCADOPAGO_ACCESSTOKEN = '{configuration["MERCADOPAGO_ACCESSTOKEN"]}'");
 
-            _accessToken = configuration["MercadoPago__AccessToken"] ?? throw new ArgumentException("MercadoPago AccessToken is required");
-            _webhookSecret = configuration["MercadoPago__WebhookSecret"] ?? string.Empty;
+            // Test environment variables directamente
+            Console.WriteLine($"🔍 Environment MercadoPago__AccessToken = '{Environment.GetEnvironmentVariable("MercadoPago__AccessToken")}'");
+
+            // Mostrar TODAS las variables que empiecen con "Mercado"
+            Console.WriteLine("🔍 All configuration keys starting with 'Mercado':");
+            foreach (var config in configuration.AsEnumerable())
+            {
+                if (config.Key.StartsWith("Mercado", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"   {config.Key} = '{config.Value}'");
+                }
+            }
+
+            _accessToken = configuration["MercadoPago:AccessToken"] ?? throw new ArgumentException("MercadoPago AccessToken is required");
+            _webhookSecret = configuration["MercadoPago:WebhookSecret"] ?? string.Empty;
 
             // Configurar HttpClient
             _httpClient.BaseAddress = new Uri(BaseUrl);
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_accessToken}");
             _httpClient.DefaultRequestHeaders.Add("X-Idempotency-Key", Guid.NewGuid().ToString());
         }
+
 
         public async Task<CreatePreferenceResponseDto> CreatePreferenceAsync(CreatePreferenceDto preferenceDto)
         {
