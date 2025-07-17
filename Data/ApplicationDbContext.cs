@@ -109,21 +109,6 @@ namespace EcommerceAPI.Data
                       .HasForeignKey(e => e.ProductId)
                       .OnDelete(DeleteBehavior.Restrict);
             });
-
-            modelBuilder.Entity<Payment>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Amount).IsRequired().HasColumnType("decimal(10,2)");
-                entity.Property(e => e.Status).IsRequired().HasMaxLength(20).HasDefaultValue("pending");
-                entity.Property(e => e.CreatedAt).HasDefaultValueSql("NOW()");
-                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()"); 
-
-                // Relación uno a uno con Order
-                entity.HasOne(e => e.Order)
-                      .WithOne()
-                      .HasForeignKey<Payment>(e => e.OrderId)
-                      .OnDelete(DeleteBehavior.Cascade);
-            });
         }
     }
 }
