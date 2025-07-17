@@ -214,6 +214,8 @@ namespace EcommerceAPI.Services
 
         private async Task<CreatePreferenceResponseDto> CreateMercadoPagoPreference(Order order)
         {
+            Console.WriteLine("🔍 CreateMercadoPagoPreference started");
+
             var items = order.OrderItems.Select(oi => new PreferenceItemDto
             {
                 Title = oi.ProductName,
@@ -222,6 +224,8 @@ namespace EcommerceAPI.Services
                 Quantity = oi.Quantity,
                 UnitPrice = oi.UnitPrice
             }).ToList();
+
+            Console.WriteLine($"🔍 Created {items.Count} preference items");
 
             var preference = new CreatePreferenceDto
             {
@@ -233,6 +237,10 @@ namespace EcommerceAPI.Services
                 },
                 NotificationUrl = $"{_configuration["App:BaseUrl"]}/api/checkout/webhook"
             };
+
+            Console.WriteLine($"🔍 Created preference object. ExternalReference: {preference.ExternalReference}");
+            Console.WriteLine($"🔍 NotificationUrl: {preference.NotificationUrl}");
+            Console.WriteLine("🔍 Calling MercadoPagoService.CreatePreferenceAsync");
 
             return await _mercadoPagoService.CreatePreferenceAsync(preference);
         }
