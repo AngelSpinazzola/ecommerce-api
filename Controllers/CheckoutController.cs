@@ -224,5 +224,11 @@ namespace EcommerceAPI.Controllers
                 return StatusCode(500, new { message = "Error interno del servidor" });
             }
         }
+
+        [HttpGet("ping")]
+        public IActionResult Ping()
+        {
+            return Ok(new { message = "CheckoutController is working", timestamp = DateTime.UtcNow });
+        }
     }
 }
