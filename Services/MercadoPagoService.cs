@@ -61,10 +61,16 @@ namespace EcommerceAPI.Services
 
                 var content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
+                Console.WriteLine($"🔍 Sending to MercadoPago: {jsonContent}");
+                Console.WriteLine($"🔍 Using AccessToken: {_accessToken?.Substring(0, 20)}...");
+
                 _logger.LogInformation("Creating MercadoPago preference: {Content}", jsonContent);
 
                 var response = await _httpClient.PostAsync("/checkout/preferences", content);
                 var responseContent = await response.Content.ReadAsStringAsync();
+
+                Console.WriteLine($"🔍 MercadoPago Response Status: {response.StatusCode}");
+                Console.WriteLine($"🔍 MercadoPago Response Body: {responseContent}");
 
                 if (!response.IsSuccessStatusCode)
                 {
