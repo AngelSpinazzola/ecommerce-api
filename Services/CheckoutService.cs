@@ -22,6 +22,7 @@ namespace EcommerceAPI.Services
             ILogger<CheckoutService> logger,
             IConfiguration configuration)
         {
+            Console.WriteLine("🔍 CheckoutService constructor started");
             _orderRepository = orderRepository;
             _paymentRepository = paymentRepository;
             _productRepository = productRepository;
