@@ -14,20 +14,48 @@ namespace EcommerceAPI.Controllers
 
         public CheckoutController(ICheckoutService checkoutService, ILogger<CheckoutController> logger)
         {
-            Console.WriteLine("🔍 CheckoutController constructor with ICheckoutService");
-            Console.WriteLine($"🔍 checkoutService is null: {checkoutService == null}");
-
             _checkoutService = checkoutService;
             _logger = logger;
-
-            Console.WriteLine("🔍 ICheckoutService injected successfully");
         }
 
         [HttpPost]
-        public IActionResult CreateCheckout([FromBody] CreateOrderDto createOrderDto)
+        public async Task<IActionResult> CreateCheckout([FromBody] CreateOrderDto createOrderDto)
         {
-            Console.WriteLine("🔍 CheckoutController with ICheckoutService reached");
-            return Ok(new { message = "CheckoutController with ICheckoutService works", data = createOrderDto });
+            Console.WriteLine("🔍 CheckoutController.CreateCheckout started");
+            Console.WriteLine($"🔍 Received JSON: {System.Text.Json.JsonSerializer.Serialize(createOrderDto)}");
+
+            try
+            {
+                Console.WriteLine("🔍 Validating ModelState");
+                if (!ModelState.IsValid)
+                {
+                    Console.WriteLine("🔍 ModelState is INVALID");
+                    return BadRequest(ModelState);
+                }
+
+                Console.WriteLine("🔍 Getting UserId");
+                int? userId = null;
+                if (User.Identity?.IsAuthenticated == true)
+                {
+                    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                    if (int.TryParse(userIdClaim, out int parsedUserId))
+                    {
+                        userId = parsedUserId;
+                    }
+                }
+                Console.WriteLine($"🔍 UserId: {userId}");
+
+                Console.WriteLine("🔍 Calling CheckoutService.CreateCheckoutAsync");
+                var checkout = await _checkoutService.CreateCheckoutAsync(createOrderDto, userId);
+
+                Console.WriteLine("🔍 Checkout completed successfully");
+                return Ok(checkout);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"🔍 Exception: {ex.Message}");
+                return StatusCode(500, new { message = "Error interno del servidor", error = ex.Message });
+            }
         }
     }
     //[ApiController]
