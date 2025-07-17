@@ -33,24 +33,25 @@ namespace EcommerceAPI.Services
 
         public async Task<CheckoutResponseDto> CreateCheckoutAsync(CreateOrderDto createOrderDto, int? userId = null)
         {
+            Console.WriteLine("🔍 CheckoutService.CreateCheckoutAsync started");
+
             try
             {
                 // 1. Validar productos y calcular total
+                Console.WriteLine("🔍 Step 1: Validating products");
                 var orderItems = new List<OrderItem>();
                 decimal total = 0;
 
                 foreach (var item in createOrderDto.Items)
                 {
+                    Console.WriteLine($"🔍 Processing item ProductId: {item.ProductId}");
                     var product = await _productRepository.GetByIdAsync(item.ProductId);
                     if (product == null)
                         throw new ArgumentException($"Producto con ID {item.ProductId} no encontrado");
-
                     if (product.Stock < item.Quantity)
                         throw new ArgumentException($"Stock insuficiente para {product.Name}");
-
                     var subtotal = product.Price * item.Quantity;
                     total += subtotal;
-
                     orderItems.Add(new OrderItem
                     {
                         ProductId = item.ProductId,
@@ -62,7 +63,10 @@ namespace EcommerceAPI.Services
                     });
                 }
 
+                Console.WriteLine($"🔍 Products validated. Total: {total}");
+
                 // 2. Crear orden
+                Console.WriteLine("🔍 Step 2: Creating order");
                 var order = new Order
                 {
                     CustomerName = createOrderDto.CustomerName,
@@ -74,13 +78,16 @@ namespace EcommerceAPI.Services
                     UserId = userId,
                     OrderItems = orderItems
                 };
-
                 var createdOrder = await _orderRepository.CreateAsync(order);
+                Console.WriteLine($"🔍 Order created with ID: {createdOrder.Id}");
 
                 // 3. Crear preferencia de MercadoPago
+                Console.WriteLine("🔍 Step 3: Creating MercadoPago preference");
                 var preference = await CreateMercadoPagoPreference(createdOrder);
+                Console.WriteLine($"🔍 MercadoPago preference created: {preference.Id}");
 
                 // 4. Crear registro de pago
+                Console.WriteLine("🔍 Step 4: Creating payment record");
                 var payment = new Payment
                 {
                     OrderId = createdOrder.Id,
@@ -89,10 +96,11 @@ namespace EcommerceAPI.Services
                     Status = "pending",
                     PayerEmail = createOrderDto.CustomerEmail
                 };
-
                 await _paymentRepository.CreateAsync(payment);
+                Console.WriteLine("🔍 Payment record created");
 
                 // 5. Reducir stock
+                Console.WriteLine("🔍 Step 5: Reducing stock");
                 foreach (var item in createOrderDto.Items)
                 {
                     var product = await _productRepository.GetByIdAsync(item.ProductId);
@@ -103,6 +111,7 @@ namespace EcommerceAPI.Services
                     }
                 }
 
+                Console.WriteLine("🔍 Checkout completed successfully");
                 _logger.LogInformation("Checkout created successfully. OrderId: {OrderId}, PreferenceId: {PreferenceId}",
                     createdOrder.Id, preference.Id);
 
@@ -116,6 +125,8 @@ namespace EcommerceAPI.Services
             }
             catch (Exception ex)
             {
+                Console.WriteLine($"🔍 ERROR in CheckoutService: {ex.Message}");
+                Console.WriteLine($"🔍 StackTrace: {ex.StackTrace}");
                 _logger.LogError(ex, "Error creating checkout");
                 throw;
             }
