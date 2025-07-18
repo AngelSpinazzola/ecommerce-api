@@ -181,6 +181,7 @@ namespace EcommerceAPI.Controllers
         // POST: api/order/{id}/payment-receipt
         [HttpPost("{id}/payment-receipt")]
         [Authorize]
+        [ApiExplorerSettings(IgnoreApi = true)]
         public async Task<IActionResult> UploadPaymentReceipt(int id, [FromForm] IFormFile receiptFile)
         {
             try
