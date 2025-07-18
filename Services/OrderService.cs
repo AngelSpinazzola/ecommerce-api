@@ -132,8 +132,12 @@ namespace EcommerceAPI.Services
 
             Console.WriteLine($"🔍 Order found: {order != null}");
 
-            if (order == null || order.Status != OrderStatus.PendingPayment)
-            return false;
+            if (order == null || (order.Status != OrderStatus.PendingPayment && order.Status != OrderStatus.PaymentRejected))
+            {
+                Console.WriteLine($"❌ Invalid status or order not found. Status: {order?.Status}");
+                return false;
+            }
+
             Console.WriteLine($"🔍 Order status: {order.Status}");
             Console.WriteLine($"🔍 Order ID: {order.Id}");
             try
@@ -147,22 +151,16 @@ namespace EcommerceAPI.Services
                 order.Status = OrderStatus.PaymentSubmitted;
                 order.UpdatedAt = DateTime.UtcNow;
 
-                if (order.Status != OrderStatus.PendingPayment && order.Status != OrderStatus.PaymentRejected)
-                {
-                    Console.WriteLine($"❌ Invalid status for upload: {order.Status}");
-                    return false;
-                }
-
-
                 var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
                 return updatedOrder != null;
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"❌ Error al subir comprobante: {ex.Message}");
                 return false;
             }
         }
-
+                                                            
         public async Task<bool> ApprovePaymentAsync(int orderId, string? adminNotes = null)
         {
             var order = await _orderRepository.GetByIdAsync(orderId);
