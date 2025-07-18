@@ -178,54 +178,54 @@ namespace EcommerceAPI.Controllers
             }
         }
 
-        //// POST: api/order/{id}/payment-receipt
-        //[HttpPost("{id}/payment-receipt")]
-        //[Authorize]
-        //public async Task<IActionResult> UploadPaymentReceipt(int id, [FromForm] IFormFile receiptFile)
-        //{
-        //    try
-        //    {
-        //        if (receiptFile == null || receiptFile.Length == 0)
-        //        {
-        //            return BadRequest(new { message = "No se proporcionó archivo de comprobante" });
-        //        }
+        // POST: api/order/{id}/payment-receipt
+        [HttpPost("{id}/payment-receipt")]
+        [Authorize]
+        public async Task<IActionResult> UploadPaymentReceipt(int id, [FromForm] IFormFile receiptFile)
+        {
+            try
+            {
+                if (receiptFile == null || receiptFile.Length == 0)
+                {
+                    return BadRequest(new { message = "No se proporcionó archivo de comprobante" });
+                }
 
-        //        // Verifica que el archivo sea válido (imagen o PDF)
-        //        var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf" };
-        //        var fileExtension = Path.GetExtension(receiptFile.FileName).ToLowerInvariant();
-        //        if (!allowedExtensions.Contains(fileExtension))
-        //        {
-        //            return BadRequest(new { message = "Formato de archivo no válido. Solo se permiten JPG, PNG o PDF" });
-        //        }
+                // Verifica que el archivo sea válido (imagen o PDF)
+                var allowedExtensions = new[] { ".jpg", ".jpeg", ".png", ".pdf" };
+                var fileExtension = Path.GetExtension(receiptFile.FileName).ToLowerInvariant();
+                if (!allowedExtensions.Contains(fileExtension))
+                {
+                    return BadRequest(new { message = "Formato de archivo no válido. Solo se permiten JPG, PNG o PDF" });
+                }
 
-        //        // Verifica tamaño (máximo 5MB)
-        //        if (receiptFile.Length > 5 * 1024 * 1024)
-        //        {
-        //            return BadRequest(new { message = "El archivo no puede exceder 5MB" });
-        //        }
+                // Verifica tamaño (máximo 5MB)
+                if (receiptFile.Length > 5 * 1024 * 1024)
+                {
+                    return BadRequest(new { message = "El archivo no puede exceder 5MB" });
+                }
 
-        //        // Verifica permisos
-        //        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        //        var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+                // Verifica permisos
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-        //        if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
-        //        {
-        //            return Forbid("No tienes permisos para subir comprobante a esta orden");
-        //        }
+                if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
+                {
+                    return Forbid("No tienes permisos para subir comprobante a esta orden");
+                }
 
-        //        var result = await _orderService.UploadPaymentReceiptAsync(id, receiptFile);
-        //        if (!result)
-        //        {
-        //            return NotFound(new { message = "Orden no encontrada o no está en estado válido para subir comprobante" });
-        //        }
+                var result = await _orderService.UploadPaymentReceiptAsync(id, receiptFile);
+                if (!result)
+                {
+                    return NotFound(new { message = "Orden no encontrada o no está en estado válido para subir comprobante" });
+                }
 
-        //        return Ok(new { message = "Comprobante de pago subido correctamente. Tu orden está ahora en revisión." });
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(500, new { message = "Error interno del servidor", error = ex.Message });
-        //    }
-        //}
+                return Ok(new { message = "Comprobante de pago subido correctamente. Tu orden está ahora en revisión." });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = "Error interno del servidor", error = ex.Message });
+            }
+        }
 
         // GET: api/order/pending-review
         [HttpGet("pending-review")]
