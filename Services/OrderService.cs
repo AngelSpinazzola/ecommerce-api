@@ -126,14 +126,16 @@ namespace EcommerceAPI.Services
             return await _orderRepository.UpdateAsync(order.Id, order) != null;
         }
 
-        // ===== NUEVOS MÉTODOS PARA PAGO POR TRANSFERENCIA =====
-
         public async Task<bool> UploadPaymentReceiptAsync(int orderId, IFormFile receiptFile)
         {
             var order = await _orderRepository.GetByIdAsync(orderId);
-            if (order == null || order.Status != OrderStatus.PendingPayment)
-                return false;
 
+            Console.WriteLine($"🔍 Order found: {order != null}");
+
+            if (order == null || order.Status != OrderStatus.PendingPayment)
+            return false;
+            Console.WriteLine($"🔍 Order status: {order.Status}");
+            Console.WriteLine($"🔍 Order ID: {order.Id}");
             try
             {
                 // Guarda el archivo del comprobante
@@ -144,6 +146,13 @@ namespace EcommerceAPI.Services
                 order.PaymentReceiptUploadedAt = DateTime.UtcNow;
                 order.Status = OrderStatus.PaymentSubmitted;
                 order.UpdatedAt = DateTime.UtcNow;
+
+                if (order.Status != OrderStatus.PendingPayment && order.Status != OrderStatus.PaymentRejected)
+                {
+                    Console.WriteLine($"❌ Invalid status for upload: {order.Status}");
+                    return false;
+                }
+
 
                 var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
                 return updatedOrder != null;
