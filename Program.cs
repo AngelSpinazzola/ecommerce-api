@@ -3,6 +3,7 @@ using EcommerceAPI.Helpers;
 using EcommerceAPI.Repositories;
 using EcommerceAPI.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Swashbuckle.AspNetCore.SwaggerGen;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -43,6 +44,8 @@ builder.Services.AddSwaggerGen(c =>
             new List<string>()
         }
     });
+
+    c.OperationFilter<FileUploadOperationFilter>();
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>

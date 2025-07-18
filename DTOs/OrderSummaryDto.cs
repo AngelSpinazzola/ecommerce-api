@@ -7,7 +7,16 @@
         public string CustomerEmail { get; set; }
         public decimal Total { get; set; }
         public string Status { get; set; }
+
+        public string StatusDescription { get; set; }
+
+        public bool HasPaymentReceipt { get; set; }
+        public DateTime? PaymentReceiptUploadedAt { get; set; }
+        public string? TrackingNumber { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public int ItemsCount { get; set; }
+
+        public int? UserId { get; set; }
     }
 }

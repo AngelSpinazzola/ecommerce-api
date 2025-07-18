@@ -7,8 +7,9 @@ namespace EcommerceAPI.Services
     {
         private readonly Cloudinary _cloudinary;
         private readonly ILogger<FileService> _logger;
-        private readonly string[] _allowedExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
-        private const long MaxFileSize = 10 * 1024 * 1024;
+        private readonly string[] _allowedImageExtensions = { ".jpg", ".jpeg", ".png", ".gif", ".webp" };
+        private readonly string[] _allowedDocumentExtensions = { ".pdf" }; 
+        private const long MaxFileSize = 10 * 1024 * 1024; // 10MB
 
         public FileService(IConfiguration configuration, ILogger<FileService> logger)
         {
@@ -17,11 +18,6 @@ namespace EcommerceAPI.Services
             var cloudName = configuration["Cloudinary:CloudName"];
             var apiKey = configuration["Cloudinary:ApiKey"];
             var apiSecret = configuration["Cloudinary:ApiSecret"];
-
-            Console.WriteLine("🔍 NEW FileService with Cloudinary initialized!");
-            Console.WriteLine($"🔍 CloudName: {cloudName}");
-            Console.WriteLine($"🔍 ApiKey: {apiKey}");
-            Console.WriteLine($"🔍 HasApiSecret: {!string.IsNullOrEmpty(apiSecret)}");
 
             var account = new Account(cloudName, apiKey, apiSecret);
             _cloudinary = new Cloudinary(account);
@@ -33,35 +29,76 @@ namespace EcommerceAPI.Services
 
             try
             {
-                if (!IsValidImageFile(imageFile))
+                // Para comprobantes de pago, permitir también PDFs
+                if (folder == "payment-receipts")
                 {
-                    throw new ArgumentException("Archivo de imagen no válido");
+                    if (!IsValidReceiptFile(imageFile))
+                    {
+                        throw new ArgumentException("Archivo no válido. Solo se permiten imágenes (JPG, PNG) o PDF");
+                    }
+                }
+                else
+                {
+                    if (!IsValidImageFile(imageFile))
+                    {
+                        throw new ArgumentException("Archivo de imagen no válido");
+                    }
                 }
 
                 using var stream = imageFile.OpenReadStream();
 
-                var uploadParams = new ImageUploadParams()
-                {
-                    File = new FileDescription(imageFile.FileName, stream),
-                    Folder = folder,
-                    UseFilename = false,
-                    UniqueFilename = true,
-                    Overwrite = false,
-                    Transformation = new Transformation()
-                        .Quality("auto")
-                        .FetchFormat("auto")
-                };
+                // Determinar el tipo de upload según la extensióndotnet build
+                var extension = Path.GetExtension(imageFile.FileName).ToLowerInvariant();
 
-                var uploadResult = await _cloudinary.UploadAsync(uploadParams);
-
-                if (uploadResult.Error != null)
+                if (extension == ".pdf")
                 {
-                    _logger.LogError($"Error al subir imagen a Cloudinary: {uploadResult.Error.Message}");
-                    throw new Exception($"Error al subir imagen: {uploadResult.Error.Message}");
+                    // Upload como documento para PDFs
+                    var uploadParams = new RawUploadParams()
+                    {
+                        File = new FileDescription(imageFile.FileName, stream),
+                        Folder = folder,
+                        UseFilename = false,
+                        UniqueFilename = true,
+                        Overwrite = false
+                    };
+
+                    var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+                    if (uploadResult.Error != null)
+                    {
+                        _logger.LogError($"Error al subir PDF a Cloudinary: {uploadResult.Error.Message}");
+                        throw new Exception($"Error al subir archivo: {uploadResult.Error.Message}");
+                    }
+
+                    _logger.LogInformation($"PDF subido exitosamente: {uploadResult.SecureUrl}");
+                    return uploadResult.SecureUrl.ToString();
                 }
+                else
+                {
+                    // Upload como imagen para JPG, PNG, etc.
+                    var uploadParams = new ImageUploadParams()
+                    {
+                        File = new FileDescription(imageFile.FileName, stream),
+                        Folder = folder,
+                        UseFilename = false,
+                        UniqueFilename = true,
+                        Overwrite = false,
+                        Transformation = new Transformation()
+                            .Quality("auto")
+                            .FetchFormat("auto")
+                    };
 
-                _logger.LogInformation($"Imagen subida exitosamente: {uploadResult.SecureUrl}");
-                return uploadResult.SecureUrl.ToString();
+                    var uploadResult = await _cloudinary.UploadAsync(uploadParams);
+
+                    if (uploadResult.Error != null)
+                    {
+                        _logger.LogError($"Error al subir imagen a Cloudinary: {uploadResult.Error.Message}");
+                        throw new Exception($"Error al subir imagen: {uploadResult.Error.Message}");
+                    }
+
+                    _logger.LogInformation($"Imagen subida exitosamente: {uploadResult.SecureUrl}");
+                    return uploadResult.SecureUrl.ToString();
+                }
             }
             catch (Exception ex)
             {
@@ -78,7 +115,7 @@ namespace EcommerceAPI.Services
                     return false;
 
                 if (!imagePath.Contains("cloudinary.com"))
-                    return true; 
+                    return true;
 
                 var publicId = ExtractPublicIdFromUrl(imagePath);
                 if (string.IsNullOrEmpty(publicId))
@@ -87,12 +124,12 @@ namespace EcommerceAPI.Services
                 var deletionParams = new DeletionParams(publicId);
                 var result = await _cloudinary.DestroyAsync(deletionParams);
 
-                _logger.LogInformation($"Imagen eliminada: {publicId}, Resultado: {result.Result}");
+                _logger.LogInformation($"Archivo eliminado: {publicId}, Resultado: {result.Result}");
                 return result.Result == "ok";
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, $"Error al eliminar imagen: {imagePath}");
+                _logger.LogError(ex, $"Error al eliminar archivo: {imagePath}");
                 return false;
             }
         }
@@ -106,10 +143,34 @@ namespace EcommerceAPI.Services
                 return false;
 
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
-            if (!_allowedExtensions.Contains(extension))
+            if (!_allowedImageExtensions.Contains(extension))
                 return false;
 
             var allowedMimeTypes = new[] { "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp" };
+            return allowedMimeTypes.Contains(file.ContentType.ToLower());
+        }
+
+        // Método para validar archivos de comprobantes (imágenes + PDF)
+        public bool IsValidReceiptFile(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return false;
+
+            if (file.Length > MaxFileSize)
+                return false;
+
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allAllowedExtensions = _allowedImageExtensions.Concat(_allowedDocumentExtensions).ToArray();
+
+            if (!allAllowedExtensions.Contains(extension))
+                return false;
+
+            // Validar MIME types para imágenes y PDFs
+            var allowedMimeTypes = new[] {
+                "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp",
+                "application/pdf"
+            };
+
             return allowedMimeTypes.Contains(file.ContentType.ToLower());
         }
 

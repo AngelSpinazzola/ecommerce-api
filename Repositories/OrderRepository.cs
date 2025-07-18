@@ -21,7 +21,6 @@ namespace EcommerceAPI.Repositories
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
 
-            // Carga las relaciones después de crear
             return await GetByIdAsync(order.Id) ?? order;
         }
 
@@ -65,6 +64,28 @@ namespace EcommerceAPI.Repositories
             existingOrder.CustomerAddress = order.CustomerAddress;
             existingOrder.Total = order.Total;
             existingOrder.Status = order.Status;
+
+            // Campos de pago
+            existingOrder.PaymentMethod = order.PaymentMethod;
+            existingOrder.PaymentReceiptUrl = order.PaymentReceiptUrl;
+            existingOrder.PaymentReceiptUploadedAt = order.PaymentReceiptUploadedAt;
+            existingOrder.PaymentApprovedAt = order.PaymentApprovedAt;
+            existingOrder.ShippedAt = order.ShippedAt;
+            existingOrder.DeliveredAt = order.DeliveredAt;
+
+            // AGREGAR ESTOS LOGS TEMPORALMENTE:
+            Console.WriteLine($"🔍 Updating order {id}");
+            Console.WriteLine($"🔍 Input AdminNotes: '{order.AdminNotes}'");
+            Console.WriteLine($"🔍 Existing AdminNotes: '{existingOrder.AdminNotes}'");
+
+            // ... resto del código
+            existingOrder.AdminNotes = order.AdminNotes;
+
+            Console.WriteLine($"🔍 After assignment: '{existingOrder.AdminNotes}'");
+
+            existingOrder.TrackingNumber = order.TrackingNumber;
+            existingOrder.ShippingProvider = order.ShippingProvider;
+
             existingOrder.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();

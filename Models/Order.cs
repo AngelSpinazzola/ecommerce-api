@@ -7,21 +7,18 @@ namespace EcommerceAPI.Models
     {
         public int Id { get; set; }
 
-        // Información del cliente
+        // Información del cliente 
         [Required]
         [StringLength(100)]
         public string CustomerName { get; set; }
-
         [Required]
         [StringLength(100)]
         [EmailAddress]
         public string CustomerEmail { get; set; }
-
         [StringLength(20)]
-        public string CustomerPhone { get; set; }
-
+        public string? CustomerPhone { get; set; }
         [StringLength(500)]
-        public string CustomerAddress { get; set; }
+        public string? CustomerAddress { get; set; }
 
         // Información de la orden
         [Required]
@@ -29,20 +26,44 @@ namespace EcommerceAPI.Models
         public decimal Total { get; set; }
 
         [Required]
-        [StringLength(20)]
-        public string Status { get; set; } = "pending"; // pending, completed, cancelled
+        [StringLength(30)]
+        public string Status { get; set; } = "pending_payment";
 
+        // Información de pago por transferencia
+        [StringLength(50)]
+        public string PaymentMethod { get; set; } = "bank_transfer";
+
+        [StringLength(500)]
+        public string? PaymentReceiptUrl { get; set; } // URL del comprobante subido
+
+        public DateTime? PaymentReceiptUploadedAt { get; set; }
+
+        public DateTime? PaymentApprovedAt { get; set; }
+
+        public DateTime? ShippedAt { get; set; }
+
+        public DateTime? DeliveredAt { get; set; }
+
+        // Notas del administrador
+        [StringLength(1000)]
+        public string? AdminNotes { get; set; }
+
+        // Información de envío
+        [StringLength(100)]
+        public string? TrackingNumber { get; set; }
+
+        [StringLength(50)]
+        public string? ShippingProvider { get; set; }
+
+        // Timestamps 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Relación opcional con usuario (si está logueado)
+        // Relaciones 
         public int? UserId { get; set; }
-
         [ForeignKey("UserId")]
         public virtual User? User { get; set; }
 
-        // Relación con items de la orden
         public virtual ICollection<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     }
 }

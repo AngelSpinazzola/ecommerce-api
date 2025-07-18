@@ -8,11 +8,16 @@ namespace EcommerceAPI.Services
     {
         private readonly IOrderRepository _orderRepository;
         private readonly IProductRepository _productRepository;
+        private readonly IFileService _fileService; // Agregar este servicio
 
-        public OrderService(IOrderRepository orderRepository, IProductRepository productRepository)
+        public OrderService(
+            IOrderRepository orderRepository,
+            IProductRepository productRepository,
+            IFileService fileService) // Agregar aquí
         {
             _orderRepository = orderRepository;
             _productRepository = productRepository;
+            _fileService = fileService;
         }
 
         public async Task<OrderDto> CreateOrderAsync(CreateOrderDto createOrderDto, int? userId = null)
@@ -47,7 +52,7 @@ namespace EcommerceAPI.Services
                 });
             }
 
-            // 2. Crea la orden
+            // 2. Crea la orden con el nuevo status de pending_payment
             var order = new Order
             {
                 CustomerName = createOrderDto.CustomerName,
@@ -55,7 +60,8 @@ namespace EcommerceAPI.Services
                 CustomerPhone = createOrderDto.CustomerPhone,
                 CustomerAddress = createOrderDto.CustomerAddress,
                 Total = total,
-                Status = "pending",
+                Status = OrderStatus.PendingPayment, // Cambiar aquí
+                PaymentMethod = "bank_transfer",
                 UserId = userId,
                 OrderItems = orderItems
             };
@@ -74,10 +80,7 @@ namespace EcommerceAPI.Services
                 }
             }
 
-            // 4. Actualiza estado de la orden a completada (por ahora, sin pagos)
-            await _orderRepository.UpdateStatusAsync(createdOrder.Id, "completed");
-
-            // 5. Obtiene la orden actualizada y convierte a DTO
+            // 4. NO marcar como completada - esperar pago
             var finalOrder = await _orderRepository.GetByIdAsync(createdOrder.Id);
             return MapToOrderDto(finalOrder!);
         }
@@ -100,18 +103,143 @@ namespace EcommerceAPI.Services
             return orders.Select(MapToOrderSummaryDto);
         }
 
-        public async Task<bool> UpdateOrderStatusAsync(int id, string status)
-        {
-            return await _orderRepository.UpdateStatusAsync(id, status);
-        }
-
         public async Task<IEnumerable<OrderSummaryDto>> GetOrdersByStatusAsync(string status)
         {
             var orders = await _orderRepository.GetByStatusAsync(status);
             return orders.Select(MapToOrderSummaryDto);
         }
 
-        // Mappers
+        // Método existente actualizado
+        public async Task<bool> UpdateOrderStatusAsync(int id, string status, string? adminNotes = null)
+        {
+            var order = await _orderRepository.GetByIdAsync(id);
+            if (order == null) return false;
+
+            order.Status = status;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(adminNotes))
+            {
+                order.AdminNotes = adminNotes;
+            }
+
+            return await _orderRepository.UpdateAsync(order.Id, order) != null;
+        }
+
+        // ===== NUEVOS MÉTODOS PARA PAGO POR TRANSFERENCIA =====
+
+        public async Task<bool> UploadPaymentReceiptAsync(int orderId, IFormFile receiptFile)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null || order.Status != OrderStatus.PendingPayment)
+                return false;
+
+            try
+            {
+                // Guarda el archivo del comprobante
+                var receiptUrl = await _fileService.SaveImageAsync(receiptFile, "receipts");
+
+                // Actualiza la orden
+                order.PaymentReceiptUrl = receiptUrl;
+                order.PaymentReceiptUploadedAt = DateTime.UtcNow;
+                order.Status = OrderStatus.PaymentSubmitted;
+                order.UpdatedAt = DateTime.UtcNow;
+
+                var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
+                return updatedOrder != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public async Task<bool> ApprovePaymentAsync(int orderId, string? adminNotes = null)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null || order.Status != OrderStatus.PaymentSubmitted)
+                return false;
+
+            order.Status = OrderStatus.PaymentApproved;
+            order.PaymentApprovedAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(adminNotes))
+            {
+                order.AdminNotes = adminNotes;
+            }
+
+            var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
+            return updatedOrder != null;
+        }
+
+        public async Task<bool> RejectPaymentAsync(int orderId, string adminNotes)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null || order.Status != OrderStatus.PaymentSubmitted)
+                return false;
+
+            order.Status = OrderStatus.PaymentRejected;
+            order.AdminNotes = adminNotes;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
+            return updatedOrder != null;
+        }
+
+        public async Task<bool> MarkAsShippedAsync(int orderId, string trackingNumber, string shippingProvider, string? adminNotes = null)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null || order.Status != OrderStatus.PaymentApproved)
+                return false;
+
+            order.Status = OrderStatus.Shipped;
+            order.TrackingNumber = trackingNumber;
+            order.ShippingProvider = shippingProvider;
+            order.ShippedAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(adminNotes))
+            {
+                order.AdminNotes = adminNotes;
+            }
+
+            var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
+            return updatedOrder != null;
+        }
+
+        public async Task<bool> MarkAsDeliveredAsync(int orderId, string? adminNotes = null)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            if (order == null || order.Status != OrderStatus.Shipped)
+                return false;
+
+            order.Status = OrderStatus.Delivered;
+            order.DeliveredAt = DateTime.UtcNow;
+            order.UpdatedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrEmpty(adminNotes))
+            {
+                order.AdminNotes = adminNotes;
+            }
+
+            var updatedOrder = await _orderRepository.UpdateAsync(order.Id, order);
+            return updatedOrder != null;
+        }
+
+        public async Task<bool> CanUserAccessOrderAsync(int orderId, int userId)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            return order?.UserId == userId;
+        }
+
+        public async Task<string?> GetPaymentReceiptUrlAsync(int orderId)
+        {
+            var order = await _orderRepository.GetByIdAsync(orderId);
+            return order?.PaymentReceiptUrl;
+        }
+
+        // ===== MAPPERS ACTUALIZADOS =====
         private OrderDto MapToOrderDto(Order order)
         {
             return new OrderDto
@@ -123,6 +251,21 @@ namespace EcommerceAPI.Services
                 CustomerAddress = order.CustomerAddress,
                 Total = order.Total,
                 Status = order.Status,
+                StatusDescription = OrderStatus.GetStatusDescription(order.Status),
+
+                // Información de pago
+                PaymentMethod = order.PaymentMethod,
+                PaymentReceiptUrl = order.PaymentReceiptUrl,
+                PaymentReceiptUploadedAt = order.PaymentReceiptUploadedAt,
+                PaymentApprovedAt = order.PaymentApprovedAt,
+                ShippedAt = order.ShippedAt,
+                DeliveredAt = order.DeliveredAt,
+
+                // Información de administración
+                AdminNotes = order.AdminNotes,
+                TrackingNumber = order.TrackingNumber,
+                ShippingProvider = order.ShippingProvider,
+
                 CreatedAt = order.CreatedAt,
                 UpdatedAt = order.UpdatedAt,
                 UserId = order.UserId,
@@ -148,8 +291,16 @@ namespace EcommerceAPI.Services
                 CustomerEmail = order.CustomerEmail,
                 Total = order.Total,
                 Status = order.Status,
+                StatusDescription = OrderStatus.GetStatusDescription(order.Status),
+
+                // Información de pago resumida
+                HasPaymentReceipt = !string.IsNullOrEmpty(order.PaymentReceiptUrl),
+                PaymentReceiptUploadedAt = order.PaymentReceiptUploadedAt,
+                TrackingNumber = order.TrackingNumber,
+
                 CreatedAt = order.CreatedAt,
-                ItemsCount = order.OrderItems?.Count ?? 0
+                ItemsCount = order.OrderItems?.Count ?? 0,
+                UserId = order.UserId
             };
         }
     }
