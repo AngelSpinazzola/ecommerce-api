@@ -4,6 +4,7 @@ using EcommerceAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Text;
 
 namespace EcommerceAPI.Controllers
 {
@@ -375,74 +376,52 @@ namespace EcommerceAPI.Controllers
         {
             try
             {
-                Console.WriteLine($"🔍 Iniciando descarga para orden {id}");
-
-                // Verifica permisos
+                // Verificar permisos
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
                 if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
                 {
-                    return Forbid("No tienes permisos para descargar el comprobante de esta orden");
+                    return Forbid();
                 }
 
                 var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
                 if (string.IsNullOrEmpty(receiptUrl))
                 {
-                    return NotFound(new { message = "No se encontró comprobante para esta orden" });
+                    return NotFound();
                 }
 
-                Console.WriteLine($"🔍 Receipt URL: {receiptUrl}");
-
-                // Extrae public_id de la URL de Cloudinary
-                var publicId = ExtractPublicIdFromUrl(receiptUrl);
-                Console.WriteLine($"🔍 Public ID: {publicId}");
-
-                if (string.IsNullOrEmpty(publicId))
-                {
-                    return BadRequest(new { message = "No se pudo extraer el ID del archivo" });
-                }
-
-                // Usa Cloudinary API para obtener el archivo
-                var cloudinary = new Cloudinary(new Account(
-                    _configuration["Cloudinary:CloudName"],
-                    _configuration["Cloudinary:ApiKey"],
-                    _configuration["Cloudinary:ApiSecret"]
-                ));
-
-                // Genera URL firmada para descarga
-                var url = cloudinary.Api.UrlImgUp.ResourceType("raw").Secure().BuildUrl(publicId);
-
-                // Usa HttpClient con la URL firmada
+                // Crea HttpClient con las credenciales de Cloudinary
                 using var httpClient = new HttpClient();
-                var fileBytes = await httpClient.GetByteArrayAsync(url);
 
-                // Determinar el tipo de contenido y nombre del archivo
-                var fileName = $"comprobante_orden_{id}";
-                var contentType = "application/octet-stream";
+                // Agrega headers de autenticación para Cloudinary
+                var cloudName = _configuration["Cloudinary:CloudName"];
+                var apiKey = _configuration["Cloudinary:ApiKey"];
+                var apiSecret = _configuration["Cloudinary:ApiSecret"];
 
-                if (receiptUrl.Contains(".pdf"))
+                // Usa basic auth para acceder a Cloudinary
+                var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{apiKey}:{apiSecret}"));
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+
+                var response = await httpClient.GetAsync(receiptUrl);
+
+                if (!response.IsSuccessStatusCode)
                 {
-                    fileName += ".pdf";
-                    contentType = "application/pdf";
+                    Console.WriteLine($"❌ Cloudinary error: {response.StatusCode}");
+                    return StatusCode(500, new { message = "Error accessing file" });
                 }
-                else if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
-                {
-                    fileName += ".jpg";
-                    contentType = "image/jpeg";
-                }
-                else if (receiptUrl.Contains(".png"))
-                {
-                    fileName += ".png";
-                    contentType = "image/png";
-                }
+
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+
+                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
+                var fileName = $"comprobante_orden_{id}.pdf";
 
                 return File(fileBytes, contentType, fileName);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error downloading receipt: {ex.Message}");
-                return StatusCode(500, new { message = "Error al descargar comprobante", error = ex.Message });
+                Console.WriteLine($"❌ Error: {ex.Message}");
+                return StatusCode(500, new { message = "Error downloading file" });
             }
         }
 
