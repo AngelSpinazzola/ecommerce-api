@@ -376,83 +376,71 @@ namespace EcommerceAPI.Controllers
         {
             try
             {
+                Console.WriteLine($"🔍 [STEP 1] Iniciando descarga para orden {id}");
+
                 // Verificar permisos
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+                Console.WriteLine($"🔍 [STEP 2] User role: {userRole}");
 
                 if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
                 {
+                    Console.WriteLine($"❌ [STEP 3] Permission denied");
                     return Forbid();
                 }
 
+                Console.WriteLine($"🔍 [STEP 4] Getting receipt URL...");
                 var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
+                Console.WriteLine($"🔍 [STEP 5] Receipt URL: {receiptUrl}");
+
                 if (string.IsNullOrEmpty(receiptUrl))
                 {
+                    Console.WriteLine($"❌ [STEP 6] No receipt URL found");
                     return NotFound();
                 }
 
-                // Crea HttpClient con las credenciales de Cloudinary
-                using var httpClient = new HttpClient();
-
-                // Agrega headers de autenticación para Cloudinary
+                Console.WriteLine($"🔍 [STEP 7] Getting Cloudinary config...");
                 var cloudName = _configuration["Cloudinary:CloudName"];
                 var apiKey = _configuration["Cloudinary:ApiKey"];
                 var apiSecret = _configuration["Cloudinary:ApiSecret"];
 
-                // Usa basic auth para acceder a Cloudinary
-                var credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes($"{apiKey}:{apiSecret}"));
-                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", credentials);
+                Console.WriteLine($"🔍 [STEP 8] Config - CloudName: {cloudName}, ApiKey: {!string.IsNullOrEmpty(apiKey)}");
 
+                Console.WriteLine($"🔍 [STEP 9] Creating HTTP client...");
+                using var httpClient = new HttpClient();
+
+                Console.WriteLine($"🔍 [STEP 10] Making request to Cloudinary...");
                 var response = await httpClient.GetAsync(receiptUrl);
+                Console.WriteLine($"🔍 [STEP 11] Cloudinary response: {response.StatusCode}");
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"❌ Cloudinary error: {response.StatusCode}");
-                    return StatusCode(500, new { message = "Error accessing file" });
+                    Console.WriteLine($"❌ [STEP 12] Cloudinary error: {response.StatusCode} - {response.ReasonPhrase}");
+
+                    // Intentar leer el contenido del error
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"❌ [STEP 13] Error content: {errorContent}");
+
+                    return StatusCode(500, new { message = $"Cloudinary error: {response.StatusCode}" });
                 }
 
+                Console.WriteLine($"🔍 [STEP 14] Reading file bytes...");
                 var fileBytes = await response.Content.ReadAsByteArrayAsync();
+                Console.WriteLine($"🔍 [STEP 15] File size: {fileBytes.Length} bytes");
 
                 var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
                 var fileName = $"comprobante_orden_{id}.pdf";
 
+                Console.WriteLine($"🔍 [STEP 16] Returning file...");
                 return File(fileBytes, contentType, fileName);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Error: {ex.Message}");
-                return StatusCode(500, new { message = "Error downloading file" });
+                Console.WriteLine($"❌ [ERROR] Exception: {ex.Message}");
+                Console.WriteLine($"❌ [ERROR] StackTrace: {ex.StackTrace}");
+                return StatusCode(500, new { message = "Error downloading file", error = ex.Message });
             }
         }
-
-        private string ExtractPublicIdFromUrl(string imageUrl)
-        {
-            try
-            {
-                var uri = new Uri(imageUrl);
-                var pathParts = uri.AbsolutePath.Split('/');
-
-                var uploadIndex = Array.IndexOf(pathParts, "upload");
-                if (uploadIndex >= 0 && uploadIndex + 2 < pathParts.Length)
-                {
-                    var publicIdParts = pathParts.Skip(uploadIndex + 2).ToArray();
-                    var publicId = string.Join("/", publicIdParts);
-
-                    var lastDotIndex = publicId.LastIndexOf('.');
-                    if (lastDotIndex > 0)
-                        publicId = publicId.Substring(0, lastDotIndex);
-
-                    return publicId;
-                }
-
-                return string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
-            }
-        }
-
 
     }
 }
