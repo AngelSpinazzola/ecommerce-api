@@ -1,4 +1,5 @@
 ﻿using CloudinaryDotNet;
+using CloudinaryDotNet.Actions;
 using EcommerceAPI.DTOs;
 using EcommerceAPI.Services;
 using Microsoft.AspNetCore.Authorization;
@@ -381,57 +382,82 @@ namespace EcommerceAPI.Controllers
                 // Verificar permisos
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-                Console.WriteLine($"🔍 [STEP 2] User role: {userRole}");
 
                 if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
                 {
-                    Console.WriteLine($"❌ [STEP 3] Permission denied");
                     return Forbid();
                 }
 
-                Console.WriteLine($"🔍 [STEP 4] Getting receipt URL...");
                 var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
-                Console.WriteLine($"🔍 [STEP 5] Receipt URL: {receiptUrl}");
-
                 if (string.IsNullOrEmpty(receiptUrl))
                 {
-                    Console.WriteLine($"❌ [STEP 6] No receipt URL found");
                     return NotFound();
                 }
 
-                Console.WriteLine($"🔍 [STEP 7] Getting Cloudinary config...");
-                var cloudName = _configuration["Cloudinary:CloudName"];
-                var apiKey = _configuration["Cloudinary:ApiKey"];
-                var apiSecret = _configuration["Cloudinary:ApiSecret"];
+                Console.WriteLine($"🔍 [STEP 2] Receipt URL: {receiptUrl}");
 
-                Console.WriteLine($"🔍 [STEP 8] Config - CloudName: {cloudName}, ApiKey: {!string.IsNullOrEmpty(apiKey)}");
+                // Extraer public_id de la URL
+                var publicId = ExtractPublicIdFromUrl(receiptUrl);
+                Console.WriteLine($"🔍 [STEP 3] Public ID: {publicId}");
 
-                Console.WriteLine($"🔍 [STEP 9] Creating HTTP client...");
+                if (string.IsNullOrEmpty(publicId))
+                {
+                    return BadRequest(new { message = "No se pudo extraer el ID del archivo" });
+                }
+
+                // Usar Cloudinary SDK con autenticación
+                var cloudinary = new Cloudinary(new Account(
+                    _configuration["Cloudinary:CloudName"],
+                    _configuration["Cloudinary:ApiKey"],
+                    _configuration["Cloudinary:ApiSecret"]
+                ));
+
+                Console.WriteLine($"🔍 [STEP 4] Cloudinary configurado");
+
+                // Obtener información del recurso para verificar que existe
+                var resource = await cloudinary.GetResourceAsync(new GetResourceParams(publicId)
+                {
+                    ResourceType = ResourceType.Raw
+                });
+
+                Console.WriteLine($"🔍 [STEP 5] Resource found: {resource.PublicId}");
+
+                // Generar URL de descarga autenticada
+                var downloadUrl = cloudinary.Api.UrlImgUp
+                    .ResourceType("raw")
+                    .Secure()
+                    .BuildUrl(publicId);
+
+                Console.WriteLine($"🔍 [STEP 6] Download URL: {downloadUrl}");
+
+                // Ahora sí hacer la petición HTTP con la URL autenticada
                 using var httpClient = new HttpClient();
+                var response = await httpClient.GetAsync(downloadUrl);
 
-                Console.WriteLine($"🔍 [STEP 10] Making request to Cloudinary...");
-                var response = await httpClient.GetAsync(receiptUrl);
-                Console.WriteLine($"🔍 [STEP 11] Cloudinary response: {response.StatusCode}");
+                Console.WriteLine($"🔍 [STEP 7] HTTP Response: {response.StatusCode}");
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    Console.WriteLine($"❌ [STEP 12] Cloudinary error: {response.StatusCode} - {response.ReasonPhrase}");
-
-                    // Intentar leer el contenido del error
-                    var errorContent = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"❌ [STEP 13] Error content: {errorContent}");
-
-                    return StatusCode(500, new { message = $"Cloudinary error: {response.StatusCode}" });
+                    return StatusCode(500, new { message = $"Error accessing file: {response.StatusCode}" });
                 }
 
-                Console.WriteLine($"🔍 [STEP 14] Reading file bytes...");
                 var fileBytes = await response.Content.ReadAsByteArrayAsync();
-                Console.WriteLine($"🔍 [STEP 15] File size: {fileBytes.Length} bytes");
+                Console.WriteLine($"🔍 [STEP 8] File size: {fileBytes.Length} bytes");
 
-                var contentType = response.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
-                var fileName = $"comprobante_orden_{id}.pdf";
+                var contentType = "application/pdf";
+                if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
+                    contentType = "image/jpeg";
+                else if (receiptUrl.Contains(".png"))
+                    contentType = "image/png";
 
-                Console.WriteLine($"🔍 [STEP 16] Returning file...");
+                var fileName = $"comprobante_orden_{id}";
+                if (receiptUrl.Contains(".pdf"))
+                    fileName += ".pdf";
+                else if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
+                    fileName += ".jpg";
+                else if (receiptUrl.Contains(".png"))
+                    fileName += ".png";
+
                 return File(fileBytes, contentType, fileName);
             }
             catch (Exception ex)
@@ -439,6 +465,34 @@ namespace EcommerceAPI.Controllers
                 Console.WriteLine($"❌ [ERROR] Exception: {ex.Message}");
                 Console.WriteLine($"❌ [ERROR] StackTrace: {ex.StackTrace}");
                 return StatusCode(500, new { message = "Error downloading file", error = ex.Message });
+            }
+        }
+
+        private string ExtractPublicIdFromUrl(string imageUrl)
+        {
+            try
+            {
+                var uri = new Uri(imageUrl);
+                var pathParts = uri.AbsolutePath.Split('/');
+
+                var uploadIndex = Array.IndexOf(pathParts, "upload");
+                if (uploadIndex >= 0 && uploadIndex + 2 < pathParts.Length)
+                {
+                    var publicIdParts = pathParts.Skip(uploadIndex + 2).ToArray();
+                    var publicId = string.Join("/", publicIdParts);
+
+                    var lastDotIndex = publicId.LastIndexOf('.');
+                    if (lastDotIndex > 0)
+                        publicId = publicId.Substring(0, lastDotIndex);
+
+                    return publicId;
+                }
+
+                return string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 
