@@ -377,7 +377,7 @@ namespace EcommerceAPI.Controllers
         {
             try
             {
-                Console.WriteLine($"🔍 [STEP 1] Iniciando descarga para orden {id}");
+                Console.WriteLine($"🔍 Iniciando descarga para orden {id}");
 
                 // Verificar permisos
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -394,105 +394,16 @@ namespace EcommerceAPI.Controllers
                     return NotFound();
                 }
 
-                Console.WriteLine($"🔍 [STEP 2] Receipt URL: {receiptUrl}");
+                Console.WriteLine($"🔍 Receipt URL: {receiptUrl}");
 
-                // Extraer public_id de la URL
-                var publicId = ExtractPublicIdFromUrl(receiptUrl);
-                Console.WriteLine($"🔍 [STEP 3] Public ID: {publicId}");
-
-                if (string.IsNullOrEmpty(publicId))
-                {
-                    return BadRequest(new { message = "No se pudo extraer el ID del archivo" });
-                }
-
-                // Usar Cloudinary SDK con autenticación
-                var cloudinary = new Cloudinary(new Account(
-                    _configuration["Cloudinary:CloudName"],
-                    _configuration["Cloudinary:ApiKey"],
-                    _configuration["Cloudinary:ApiSecret"]
-                ));
-
-                Console.WriteLine($"🔍 [STEP 4] Cloudinary configurado");
-
-                // Obtener información del recurso para verificar que existe
-                var resource = await cloudinary.GetResourceAsync(new GetResourceParams(publicId)
-                {
-                    ResourceType = ResourceType.Raw
-                });
-
-                Console.WriteLine($"🔍 [STEP 5] Resource found: {resource.PublicId}");
-
-                // Generar URL de descarga autenticada
-                var downloadUrl = cloudinary.Api.UrlImgUp
-                    .ResourceType("raw")
-                    .Secure()
-                    .BuildUrl(publicId);
-
-                Console.WriteLine($"🔍 [STEP 6] Download URL: {downloadUrl}");
-
-                // Ahora sí hacer la petición HTTP con la URL autenticada
-                using var httpClient = new HttpClient();
-                var response = await httpClient.GetAsync(downloadUrl);
-
-                Console.WriteLine($"🔍 [STEP 7] HTTP Response: {response.StatusCode}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    return StatusCode(500, new { message = $"Error accessing file: {response.StatusCode}" });
-                }
-
-                var fileBytes = await response.Content.ReadAsByteArrayAsync();
-                Console.WriteLine($"🔍 [STEP 8] File size: {fileBytes.Length} bytes");
-
-                var contentType = "application/pdf";
-                if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
-                    contentType = "image/jpeg";
-                else if (receiptUrl.Contains(".png"))
-                    contentType = "image/png";
-
-                var fileName = $"comprobante_orden_{id}";
-                if (receiptUrl.Contains(".pdf"))
-                    fileName += ".pdf";
-                else if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
-                    fileName += ".jpg";
-                else if (receiptUrl.Contains(".png"))
-                    fileName += ".png";
-
-                return File(fileBytes, contentType, fileName);
+                // SOLUCIÓN SIMPLE: Redirect directo 
+                // El usuario ya está autenticado en nuestro sistema
+                return Redirect(receiptUrl);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ [ERROR] Exception: {ex.Message}");
-                Console.WriteLine($"❌ [ERROR] StackTrace: {ex.StackTrace}");
+                Console.WriteLine($"❌ Error: {ex.Message}");
                 return StatusCode(500, new { message = "Error downloading file", error = ex.Message });
-            }
-        }
-
-        private string ExtractPublicIdFromUrl(string imageUrl)
-        {
-            try
-            {
-                var uri = new Uri(imageUrl);
-                var pathParts = uri.AbsolutePath.Split('/');
-
-                var uploadIndex = Array.IndexOf(pathParts, "upload");
-                if (uploadIndex >= 0 && uploadIndex + 2 < pathParts.Length)
-                {
-                    var publicIdParts = pathParts.Skip(uploadIndex + 2).ToArray();
-                    var publicId = string.Join("/", publicIdParts);
-
-                    var lastDotIndex = publicId.LastIndexOf('.');
-                    if (lastDotIndex > 0)
-                        publicId = publicId.Substring(0, lastDotIndex);
-
-                    return publicId;
-                }
-
-                return string.Empty;
-            }
-            catch
-            {
-                return string.Empty;
             }
         }
 
