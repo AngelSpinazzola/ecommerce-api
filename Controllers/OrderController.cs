@@ -11,10 +11,12 @@ namespace EcommerceAPI.Controllers
     public class OrderController : ControllerBase
     {
         private readonly IOrderService _orderService;
+        private readonly ILogger<OrderController> _logger;
 
-        public OrderController(IOrderService orderService)
+        public OrderController(IOrderService orderService, ILogger<OrderController> logger) 
         {
             _orderService = orderService;
+            _logger = logger; 
         }
 
         // POST: api/order
@@ -360,6 +362,65 @@ namespace EcommerceAPI.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { message = "Error interno del servidor", error = ex.Message });
+            }
+        }
+
+        [HttpGet("{id}/download-receipt")]
+        [Authorize]
+        public async Task<IActionResult> DownloadReceipt(int id)
+        {
+            try
+            {
+                // Verificar permisos
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
+                {
+                    return Forbid("No tienes permisos para descargar el comprobante de esta orden");
+                }
+
+                var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
+                if (string.IsNullOrEmpty(receiptUrl))
+                {
+                    return NotFound(new { message = "No se encontró comprobante para esta orden" });
+                }
+
+                // Descargar el archivo desde Cloudinary y servirlo
+                using var httpClient = new HttpClient();
+                var fileBytes = await httpClient.GetByteArrayAsync(receiptUrl);
+
+                // Determinar el tipo de contenido y nombre del archivo
+                var fileName = $"comprobante_orden_{id}";
+                var contentType = "application/octet-stream";
+
+                if (receiptUrl.Contains(".pdf"))
+                {
+                    fileName += ".pdf";
+                    contentType = "application/pdf";
+                }
+                else if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
+                {
+                    fileName += ".jpg";
+                    contentType = "image/jpeg";
+                }
+                else if (receiptUrl.Contains(".png"))
+                {
+                    fileName += ".png";
+                    contentType = "image/png";
+                }
+
+                return File(fileBytes, contentType, fileName);
+            }
+            catch (HttpRequestException ex)
+            {
+                _logger.LogError($"Error downloading file from Cloudinary: {ex.Message}");
+                return StatusCode(500, new { message = "Error al acceder al archivo en Cloudinary" });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error downloading receipt: {ex.Message}");
+                return StatusCode(500, new { message = "Error al descargar comprobante", error = ex.Message });
             }
         }
     }
