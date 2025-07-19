@@ -301,6 +301,7 @@ namespace EcommerceAPI.Services
 
                 // Información de pago resumida
                 HasPaymentReceipt = !string.IsNullOrEmpty(order.PaymentReceiptUrl),
+                PaymentReceiptUrl = order.PaymentReceiptUrl,
                 PaymentReceiptUploadedAt = order.PaymentReceiptUploadedAt,
                 TrackingNumber = order.TrackingNumber,
 

@@ -11,6 +11,7 @@
         public string StatusDescription { get; set; }
 
         public bool HasPaymentReceipt { get; set; }
+        public string? PaymentReceiptUrl { get; set; }
         public DateTime? PaymentReceiptUploadedAt { get; set; }
         public string? TrackingNumber { get; set; }
 
