@@ -407,5 +407,63 @@ namespace EcommerceAPI.Controllers
             }
         }
 
+        // GET: api/order/{id}/view-receipt
+        [HttpGet("{id}/view-receipt")]
+        [Authorize]
+        public async Task<IActionResult> ViewReceipt(int id)
+        {
+            try
+            {
+                Console.WriteLine($"🔍 ViewReceipt llamado para orden {id}");
+
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
+                {
+                    return Forbid();
+                }
+
+                var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
+                if (string.IsNullOrEmpty(receiptUrl))
+                {
+                    return NotFound();
+                }
+
+                Console.WriteLine($"🔍 Receipt URL: {receiptUrl}");
+
+                using var httpClient = new HttpClient();
+                var response = await httpClient.GetAsync(receiptUrl);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"❌ Cloudinary error: {response.StatusCode}");
+                    return StatusCode(500, new { message = "Error accessing file" });
+                }
+
+                var fileBytes = await response.Content.ReadAsByteArrayAsync();
+
+                var contentType = "application/octet-stream";
+                if (receiptUrl.Contains(".pdf"))
+                    contentType = "application/pdf";
+                else if (receiptUrl.Contains(".jpg") || receiptUrl.Contains(".jpeg"))
+                    contentType = "image/jpeg";
+                else if (receiptUrl.Contains(".png"))
+                    contentType = "image/png";
+
+                Console.WriteLine($"🔍 Returning file: {fileBytes.Length} bytes, type: {contentType}");
+
+                Response.Headers.Add("X-Frame-Options", "SAMEORIGIN");
+                Response.Headers.Add("Content-Disposition", "inline");
+
+                return File(fileBytes, contentType);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Error: {ex.Message}");
+                return StatusCode(500, new { message = "Error viewing file" });
+            }
+        }
+
     }
 }
