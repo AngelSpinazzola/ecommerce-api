@@ -8,12 +8,12 @@ namespace EcommerceAPI.Services
     {
         private readonly IOrderRepository _orderRepository;
         private readonly IProductRepository _productRepository;
-        private readonly IFileService _fileService; // Agregar este servicio
+        private readonly IFileService _fileService; 
 
         public OrderService(
             IOrderRepository orderRepository,
             IProductRepository productRepository,
-            IFileService fileService) // Agregar aquí
+            IFileService fileService) 
         {
             _orderRepository = orderRepository;
             _productRepository = productRepository;
@@ -60,7 +60,7 @@ namespace EcommerceAPI.Services
                 CustomerPhone = createOrderDto.CustomerPhone,
                 CustomerAddress = createOrderDto.CustomerAddress,
                 Total = total,
-                Status = OrderStatus.PendingPayment, // Cambiar aquí
+                Status = OrderStatus.PendingPayment, 
                 PaymentMethod = "bank_transfer",
                 UserId = userId,
                 OrderItems = orderItems
@@ -80,7 +80,7 @@ namespace EcommerceAPI.Services
                 }
             }
 
-            // 4. NO marcar como completada - esperar pago
+            // 4. NO marca como completada - espera el pago
             var finalOrder = await _orderRepository.GetByIdAsync(createdOrder.Id);
             return MapToOrderDto(finalOrder!);
         }
@@ -246,7 +246,6 @@ namespace EcommerceAPI.Services
             return order?.PaymentReceiptUrl;
         }
 
-        // ===== MAPPERS ACTUALIZADOS =====
         private OrderDto MapToOrderDto(Order order)
         {
             return new OrderDto

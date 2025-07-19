@@ -29,8 +29,7 @@ namespace EcommerceAPI.Services
 
             try
             {
-                // Para comprobantes de pago, permitir también PDFs
-                if (folder == "payment-receipts")
+                if (folder == "payment-receipts" || folder == "receipts")
                 {
                     if (!IsValidReceiptFile(imageFile))
                     {
@@ -47,12 +46,10 @@ namespace EcommerceAPI.Services
 
                 using var stream = imageFile.OpenReadStream();
 
-                // Determinar el tipo de upload según la extensióndotnet build
                 var extension = Path.GetExtension(imageFile.FileName).ToLowerInvariant();
 
                 if (extension == ".pdf")
                 {
-                    // Upload como documento para PDFs
                     var uploadParams = new RawUploadParams()
                     {
                         File = new FileDescription(imageFile.FileName, stream),
@@ -221,5 +218,7 @@ namespace EcommerceAPI.Services
                 return string.Empty;
             }
         }
+
+
     }
 }
