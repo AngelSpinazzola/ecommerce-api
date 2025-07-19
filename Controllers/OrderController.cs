@@ -1,4 +1,5 @@
-﻿using EcommerceAPI.DTOs;
+﻿using CloudinaryDotNet;
+using EcommerceAPI.DTOs;
 using EcommerceAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,11 +13,13 @@ namespace EcommerceAPI.Controllers
     {
         private readonly IOrderService _orderService;
         private readonly ILogger<OrderController> _logger;
+        private readonly IConfiguration _configuration;
 
-        public OrderController(IOrderService orderService, ILogger<OrderController> logger) 
+        public OrderController(IOrderService orderService, ILogger<OrderController> logger, IConfiguration configuration) 
         {
             _orderService = orderService;
-            _logger = logger; 
+            _logger = logger;
+            _configuration = configuration;
         }
 
         // POST: api/order
@@ -365,30 +368,54 @@ namespace EcommerceAPI.Controllers
             }
         }
 
+        // GET: api/order/{id}/download-receipt
         [HttpGet("{id}/download-receipt")]
-        //[Authorize]
+        [Authorize]
         public async Task<IActionResult> DownloadReceipt(int id)
         {
             try
             {
-                // Verificar permisos
-                //var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                //var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-                //if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
-                //{
-                //    return Forbid("No tienes permisos para descargar el comprobante de esta orden");
-                //}
                 Console.WriteLine($"🔍 Iniciando descarga para orden {id}");
+
+                // Verifica permisos
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
+                {
+                    return Forbid("No tienes permisos para descargar el comprobante de esta orden");
+                }
+
                 var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
                 if (string.IsNullOrEmpty(receiptUrl))
                 {
                     return NotFound(new { message = "No se encontró comprobante para esta orden" });
                 }
 
-                // Descargar el archivo desde Cloudinary y servirlo
+                Console.WriteLine($"🔍 Receipt URL: {receiptUrl}");
+
+                // Extrae public_id de la URL de Cloudinary
+                var publicId = ExtractPublicIdFromUrl(receiptUrl);
+                Console.WriteLine($"🔍 Public ID: {publicId}");
+
+                if (string.IsNullOrEmpty(publicId))
+                {
+                    return BadRequest(new { message = "No se pudo extraer el ID del archivo" });
+                }
+
+                // Usa Cloudinary API para obtener el archivo
+                var cloudinary = new Cloudinary(new Account(
+                    _configuration["Cloudinary:CloudName"],
+                    _configuration["Cloudinary:ApiKey"],
+                    _configuration["Cloudinary:ApiSecret"]
+                ));
+
+                // Genera URL firmada para descarga
+                var url = cloudinary.Api.UrlImgUp.ResourceType("raw").Secure().BuildUrl(publicId);
+
+                // Usa HttpClient con la URL firmada
                 using var httpClient = new HttpClient();
-                var fileBytes = await httpClient.GetByteArrayAsync(receiptUrl);
+                var fileBytes = await httpClient.GetByteArrayAsync(url);
 
                 // Determinar el tipo de contenido y nombre del archivo
                 var fileName = $"comprobante_orden_{id}";
@@ -412,52 +439,41 @@ namespace EcommerceAPI.Controllers
 
                 return File(fileBytes, contentType, fileName);
             }
-            catch (HttpRequestException ex)
-            {
-                _logger.LogError($"Error downloading file from Cloudinary: {ex.Message}");
-                return StatusCode(500, new { message = "Error al acceder al archivo en Cloudinary" });
-            }
             catch (Exception ex)
             {
-                _logger.LogError($"Error downloading receipt: {ex.Message}");
+                Console.WriteLine($"❌ Error downloading receipt: {ex.Message}");
                 return StatusCode(500, new { message = "Error al descargar comprobante", error = ex.Message });
             }
         }
 
-        // GET: api/order/{id}/debug-receipt
-        [HttpGet("{id}/debug-receipt")]
-        public async Task<IActionResult> DebugReceipt(int id)
+        private string ExtractPublicIdFromUrl(string imageUrl)
         {
             try
             {
-                Console.WriteLine($"🔍 DEBUG: Iniciando debug para orden {id}");
+                var uri = new Uri(imageUrl);
+                var pathParts = uri.AbsolutePath.Split('/');
 
-                var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
-                Console.WriteLine($"🔍 DEBUG: Receipt URL: {receiptUrl}");
-
-                if (string.IsNullOrEmpty(receiptUrl))
+                var uploadIndex = Array.IndexOf(pathParts, "upload");
+                if (uploadIndex >= 0 && uploadIndex + 2 < pathParts.Length)
                 {
-                    return Ok(new { message = "No hay comprobante", orderId = id });
+                    var publicIdParts = pathParts.Skip(uploadIndex + 2).ToArray();
+                    var publicId = string.Join("/", publicIdParts);
+
+                    var lastDotIndex = publicId.LastIndexOf('.');
+                    if (lastDotIndex > 0)
+                        publicId = publicId.Substring(0, lastDotIndex);
+
+                    return publicId;
                 }
 
-                // Probar acceso directo a Cloudinary
-                using var httpClient = new HttpClient();
-                var response = await httpClient.GetAsync(receiptUrl);
-                Console.WriteLine($"🔍 DEBUG: Cloudinary response: {response.StatusCode}");
-
-                return Ok(new
-                {
-                    orderId = id,
-                    receiptUrl = receiptUrl,
-                    cloudinaryStatus = response.StatusCode.ToString(),
-                    contentLength = response.Content.Headers.ContentLength
-                });
+                return string.Empty;
             }
-            catch (Exception ex)
+            catch
             {
-                Console.WriteLine($"❌ DEBUG ERROR: {ex.Message}");
-                return Ok(new { error = ex.Message, stackTrace = ex.StackTrace });
+                return string.Empty;
             }
         }
+
+
     }
 }
