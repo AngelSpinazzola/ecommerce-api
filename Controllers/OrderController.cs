@@ -416,17 +416,6 @@ namespace EcommerceAPI.Controllers
             {
                 Console.WriteLine($"🔍 ViewReceipt llamado para orden {id}");
 
-                // Obtener token del query string si existe (para móvil)
-                var tokenFromQuery = Request.Query["token"].FirstOrDefault();
-
-                // Si hay token en query, validarlo manualmente
-                if (!string.IsNullOrEmpty(tokenFromQuery))
-                {
-                    // Para móvil, aceptar token en query
-                    Console.WriteLine($"🔍 Token en query para móvil: {tokenFromQuery.Substring(0, 10)}...");
-                }
-
-                // Validación normal para requests con Authorization header
                 var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                 var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
@@ -464,9 +453,8 @@ namespace EcommerceAPI.Controllers
 
                 Console.WriteLine($"🔍 Returning file: {fileBytes.Length} bytes, type: {contentType}");
 
-                // Headers para móvil
                 Response.Headers.Add("X-Frame-Options", "SAMEORIGIN");
-                Response.Headers.Add("Content-Disposition", "attachment; filename=comprobante.pdf");
+                Response.Headers.Add("Content-Disposition", "inline");
 
                 return File(fileBytes, contentType);
             }
