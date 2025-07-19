@@ -416,30 +416,13 @@ namespace EcommerceAPI.Controllers
             {
                 Console.WriteLine($"🔍 ViewReceipt llamado para orden {id}");
 
-                // Verificar token en query string para móvil
-                var tokenFromQuery = Request.Query["token"].FirstOrDefault();
-                var isMobileRequest = Request.Headers.UserAgent.Any(ua =>
-                    ua.ToLower().Contains("mobile") ||
-                    ua.ToLower().Contains("android") ||
-                    ua.ToLower().Contains("iphone"));
+                // Validación normal (igual que antes)
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
 
-                Console.WriteLine($"🔍 Mobile request: {isMobileRequest}, Token in query: {!string.IsNullOrEmpty(tokenFromQuery)}");
-
-                // Para requests móviles con token en query, validar de forma diferente
-                if (isMobileRequest && !string.IsNullOrEmpty(tokenFromQuery))
+                if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
                 {
-                    Console.WriteLine($"🔍 Procesando request móvil con token en query");
-                }
-                else
-                {
-                    // Validación normal para desktop
-                    var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                    var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
-
-                    if (userRole != "Admin" && !await _orderService.CanUserAccessOrderAsync(id, int.Parse(userIdClaim)))
-                    {
-                        return Forbid();
-                    }
+                    return Forbid();
                 }
 
                 var receiptUrl = await _orderService.GetPaymentReceiptUrlAsync(id);
@@ -461,7 +444,6 @@ namespace EcommerceAPI.Controllers
 
                 var fileBytes = await response.Content.ReadAsByteArrayAsync();
 
-                // Determinar content type
                 var contentType = "application/octet-stream";
                 if (receiptUrl.Contains(".pdf"))
                     contentType = "application/pdf";
@@ -472,21 +454,9 @@ namespace EcommerceAPI.Controllers
 
                 Console.WriteLine($"🔍 Returning file: {fileBytes.Length} bytes, type: {contentType}");
 
-                // Headers específicos para móvil vs desktop
-                if (isMobileRequest)
-                {
-                    // Para móvil: forzar descarga o visualización directa
-                    Response.Headers.Add("Content-Disposition", "inline");
-                    Response.Headers.Add("X-Frame-Options", "ALLOWALL");
-                    Response.Headers.Add("Cache-Control", "no-cache, no-store, must-revalidate");
-                    Console.WriteLine($"🔍 Mobile headers added");
-                }
-                else
-                {
-                    // Para desktop: permitir iframe
-                    Response.Headers.Add("X-Frame-Options", "SAMEORIGIN");
-                    Response.Headers.Add("Content-Disposition", "inline");
-                }
+                // Headers básicos para compatibilidad
+                Response.Headers.Add("X-Frame-Options", "SAMEORIGIN");
+                Response.Headers.Add("Content-Disposition", "inline");
 
                 return File(fileBytes, contentType);
             }
